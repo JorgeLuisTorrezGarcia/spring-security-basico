@@ -12,20 +12,16 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.practica.producto.service.UserDetailsServiceImp;
+
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity  //habilita el uso de anotaciones para el filtro en la clase controller 
 public class SecurityConfig {
 
 //    @Bean
@@ -53,10 +49,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
         return httpSecurity
-                .csrf(csrf -> csrf.disable()) // pq no usamos formulario
-                //sin estado: no guardaremos las sesiones en memoria pq son pesadas y manejaremos token
+                .csrf(csrf -> csrf.disable())
+                .httpBasic(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .httpBasic(Customizer.withDefaults()) //para que solo pida user y password
+                .authorizeHttpRequests(http -> {
+                    // Configurar los endpoints publicos
+                    http.requestMatchers(HttpMethod.GET, "/auth/get").permitAll();
+
+                    // Cofnigurar los endpoints privados
+                    http.requestMatchers(HttpMethod.POST, "/auth/post").hasAnyRole("ADMIN", "DEVELOPER");
+                    http.requestMatchers(HttpMethod.PATCH, "/auth/patch").hasAnyAuthority("REFACTOR");
+
+                    // Configurar el resto de endpoint - NO ESPECIFICADOS
+                    http.anyRequest().denyAll();
+                })
                 .build();
     }
 
@@ -74,15 +80,15 @@ public class SecurityConfig {
         conectar con la bd. Y necesita 2 componentes mas que son el PassWordEncoder y el UserDetailService
     */
     @Bean
-    public AuthenticationProvider authenticationProvider(){
+    public AuthenticationProvider authenticationProvider(UserDetailsServiceImp userDetailsService){
         DaoAuthenticationProvider provider= new DaoAuthenticationProvider();
         provider.setPasswordEncoder(passwordEncoder());
-        provider.setUserDetailsService(userDetailsService());
+        provider.setUserDetailsService(userDetailsService);
         return provider;
     }
 /**
     // configurando el UserDetailsService para un usuario
-    @Bean
+    //@Bean
     public UserDetailsService userDetailsService(){
         // spring security valida a los usuario mediante el UserDetails
         UserDetails userDetails = User.withUsername("Jorge")
@@ -95,31 +101,33 @@ public class SecurityConfig {
     }
 **/
 
-    // configurando el UserDetailsService para varios usuarios
-    @Bean
+// configurando el UserDetailsService para varios usuarios en memoria
+    /*     @Bean
     public UserDetailsService userDetailsService(){
         // spring security valida a los usuario mediante el UserDetails
         List<UserDetails> userDetails = new ArrayList<>();
-
+    
         userDetails.add(User.withUsername("Jorge")
                 .password("1234")
                 .roles("ADMIN") // ROL
                 .authorities("READ", "CREATE")  // PERMISOS
                 .build());
-
+    
         userDetails.add(User.withUsername("Luis")
                 .password("1234")
                 .roles("USER") // ROL
                 .authorities("READ")  // PERMISOS
                 .build());
-
-
+    
+    
         // guardamos el usario creado en memoria(LO NORMAL ES OBTENER LOS USER DESDE LA BD)
         return new InMemoryUserDetailsManager(userDetails);
     }
+    */
+    
 
     @Bean
     public PasswordEncoder passwordEncoder(){
-        return NoOpPasswordEncoder.getInstance();  // Test: solo para hacer pruebas
+        return new BCryptPasswordEncoder();  // encripta la contraseña
     }
 }
